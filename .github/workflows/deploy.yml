@@ -1,11 +1,26 @@
 name: Deploy to Elastic Beanstalk
-
+uses: aws-actions/configure-aws-credentials@v4
+  with:
+    aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+    aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+    aws-region: ${{ secrets.AWS_REGION }}
+    
+name: Set RDS environment variables in Elastic Beanstalk
+  run: |
+    eb setenv \
+      AWS_RDS_DB_NAME=${{ secrets.AWS_RDS_DB_NAME }} \
+      AWS_RDS_USERNAME=${{ secrets.AWS_RDS_USERNAME }} \
+      AWS_RDS_PASSWORD=${{ secrets.AWS_RDS_PASSWORD }} \
+      AWS_RDS_HOSTNAME=${{ secrets.AWS_RDS_HOSTNAME }} \
+      AWS_RDS_PORT=${{ secrets.AWS_RDS_PORT }} \
+      DJANGO_SETTINGS_MODULE=yourproject.settings \
+      DEBUG=False
 on:
   push:
     branches: [main]
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
@@ -13,30 +28,66 @@ jobs:
       EBS_ENV_NAME: ${{ secrets.EBS_ENV_NAME }}
 
     steps:
-      - name: Checkout code
+      # 1. Checkout code
+      - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Configure AWS credentials
+      # 2. Build Docker images (validation step)
+      - name: Build Frontend
+        run: docker build -t frontend ./frontend
+
+      - name: Build Backend
+        run: docker build -t backend ./backend
+
+      # 3. Optional: Run tests here (e.g., unit tests)
+      # - name: Run Tests
+      #   run: docker-compose run backend python manage.py test
+
+      # 4. Configure AWS
+      - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Install Python and EB CLI
+      # 5. Install EB CLI
+      - name: Install EB CLI
         run: |
           sudo apt-get update
           sudo apt-get install -y python3 python3-pip
           pip install awsebcli --upgrade
-          eb --version
 
-      - name: Initialize EB CLI
+      # 6. Generate deployment artifacts
+      - name: Prepare Deployment
         run: |
-          eb init "$EBS_APP_NAME" \
-            --platform "Docker running on 64bit Amazon Linux 2" \
-            --region "$AWS_REGION"
+          # Generate Dockerrun.aws.json
+          echo '{
+            "AWSEBDockerrunVersion": 2,
+            "containerDefinitions": [
+              {
+                "name": "frontend",
+                "image": "frontend",
+                "essential": true,
+                "memory": 256,
+                "portMappings": [{"hostPort": 80, "containerPort": 3000}]
+              },
+              {
+                "name": "backend",
+                "image": "backend",
+                "essential": true,
+                "memory": 512,
+                "portMappings": [{"hostPort": 8000, "containerPort": 8000}]
+              }
+            ]
+          }' > Dockerrun.aws.json
 
-      - name: Deploy to EB
+          # Create deployment package
+          zip deploy.zip Dockerrun.aws.json
+
+      # 7. Deploy to Elastic Beanstalk
+      - name: Deploy
         run: |
+          eb init "$EBS_APP_NAME" --platform "Docker" --region "$AWS_REGION"
           eb use "$EBS_ENV_NAME"
           eb deploy --staged --label "v-${{ github.run_number }}"

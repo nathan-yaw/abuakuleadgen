@@ -118,11 +118,11 @@ WSGI_APPLICATION = 'lead_gen_api.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DATABASE_NAME'),
-        'USER': os.environ.get('DATABASE_USER'),
-        'PASSWORD': os.environ.get('DATABASE_PASSWORD'),
-        'HOST': os.environ.get('DATABASE_HOST', 'localhost'),
-        'PORT': os.environ.get('DATABASE_PORT', '5432'),
+        'NAME': os.getenv('AWS_RDS_DB_NAME', 'fallback_db_name'),
+        'USER': os.getenv('AWS_RDS_USERNAME', 'fallback_user'),
+        'PASSWORD': os.getenv('AWS_RDS_PASSWORD', ''),
+        'HOST': os.getenv('AWS_RDS_HOSTNAME', 'localhost'),
+        'PORT': os.getenv('AWS_RDS_PORT', '5432'),
     }
 }
 
@@ -170,6 +170,6 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 try:
-    from .local_settings import *
+    from local_settings import *
 except ImportError:
         pass
