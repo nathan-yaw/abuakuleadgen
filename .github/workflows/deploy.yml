@@ -33,6 +33,12 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
+      - name: Install EB CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip
+          pip install awsebcli --upgrade
+
       - name: Set RDS environment variables
         run: |
           eb setenv \
@@ -43,12 +49,6 @@ jobs:
             AWS_RDS_PORT=${{ secrets.AWS_RDS_PORT }} \
             DJANGO_SETTINGS_MODULE=lead_gen_api.settings \
             DEBUG=False
-
-      - name: Install EB CLI
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y python3 python3-pip
-          pip install awsebcli --upgrade
 
       - name: Prepare Deployment
         run: |
