@@ -13,26 +13,19 @@ jobs:
       EBS_ENV_NAME: ${{ secrets.EBS_ENV_NAME }}
 
     steps:
-      # 1. Checkout code
-      - name: Checkout
+      - name: Checkout code
         uses: actions/checkout@v3
 
-      # 2. Build Docker images
+      # Build Frontend with correct context
       - name: Build Frontend
-        run: |
-          docker build \
-            -t frontend \
-            -f leadGen-frontend/Dockerfile \
-            ./leadGen-frontend
+        working-directory: ./leadGen-frontend
+        run: docker build -t frontend .
 
+      # Build Backend with correct context
       - name: Build Backend
-        run: |
-          docker build \
-            -t backend \
-            -f lead_gen_api/Dockerfile \
-            ./lead_gen_api
+        working-directory: ./lead_gen_api
+        run: docker build -t backend .
 
-      # 3. Configure AWS
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -40,7 +33,6 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-      # 4. Set RDS environment variables
       - name: Set RDS environment variables
         run: |
           eb setenv \
@@ -52,14 +44,12 @@ jobs:
             DJANGO_SETTINGS_MODULE=lead_gen_api.settings \
             DEBUG=False
 
-      # 5. Install EB CLI
       - name: Install EB CLI
         run: |
           sudo apt-get update
           sudo apt-get install -y python3 python3-pip
           pip install awsebcli --upgrade
 
-      # 6. Generate deployment artifacts
       - name: Prepare Deployment
         run: |
           echo '{
@@ -88,10 +78,8 @@ jobs:
               }
             ]
           }' > Dockerrun.aws.json
-
           zip deploy.zip Dockerrun.aws.json
 
-      # 7. Deploy to Elastic Beanstalk
       - name: Deploy
         run: |
           eb init "$EBS_APP_NAME" --platform "Docker running on 64bit Amazon Linux 2" --region "$AWS_REGION"
