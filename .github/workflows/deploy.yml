@@ -17,12 +17,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
-      # 2. Build Docker images (validation step)
+      # 2. Build Docker images
       - name: Build Frontend
-        run: docker build -t frontend ./frontend
+        run: |
+          docker build \
+            -t frontend \
+            -f leadGen-frontend/Dockerfile \
+            ./leadGen-frontend
 
       - name: Build Backend
-        run: docker build -t backend ./backend
+        run: |
+          docker build \
+            -t backend \
+            -f lead_gen_api/Dockerfile \
+            ./lead_gen_api
 
       # 3. Configure AWS
       - name: Configure AWS Credentials
@@ -41,7 +49,7 @@ jobs:
             AWS_RDS_PASSWORD=${{ secrets.AWS_RDS_PASSWORD }} \
             AWS_RDS_HOSTNAME=${{ secrets.AWS_RDS_HOSTNAME }} \
             AWS_RDS_PORT=${{ secrets.AWS_RDS_PORT }} \
-            DJANGO_SETTINGS_MODULE=yourproject.settings \
+            DJANGO_SETTINGS_MODULE=lead_gen_api.settings \
             DEBUG=False
 
       # 5. Install EB CLI
@@ -62,22 +70,30 @@ jobs:
                 "image": "frontend",
                 "essential": true,
                 "memory": 256,
-                "portMappings": [{"hostPort": 80, "containerPort": 3000}]
+                "portMappings": [{"hostPort": 80, "containerPort": 80}]
               },
               {
                 "name": "backend",
                 "image": "backend",
                 "essential": true,
                 "memory": 512,
-                "portMappings": [{"hostPort": 8000, "containerPort": 8000}]
+                "portMappings": [{"hostPort": 8000, "containerPort": 8000}],
+                "environment": [
+                  {"name": "AWS_RDS_DB_NAME", "value": "$AWS_RDS_DB_NAME"},
+                  {"name": "AWS_RDS_USERNAME", "value": "$AWS_RDS_USERNAME"},
+                  {"name": "AWS_RDS_PASSWORD", "value": "$AWS_RDS_PASSWORD"},
+                  {"name": "AWS_RDS_HOSTNAME", "value": "$AWS_RDS_HOSTNAME"},
+                  {"name": "AWS_RDS_PORT", "value": "$AWS_RDS_PORT"}
+                ]
               }
             ]
           }' > Dockerrun.aws.json
+
           zip deploy.zip Dockerrun.aws.json
 
       # 7. Deploy to Elastic Beanstalk
       - name: Deploy
         run: |
-          eb init "$EBS_APP_NAME" --platform "Docker" --region "$AWS_REGION"
+          eb init "$EBS_APP_NAME" --platform "Docker running on 64bit Amazon Linux 2" --region "$AWS_REGION"
           eb use "$EBS_ENV_NAME"
           eb deploy --staged --label "v-${{ github.run_number }}"
