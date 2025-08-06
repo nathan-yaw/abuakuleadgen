@@ -33,10 +33,20 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - name: Initialize EB CLI
         run: |
-          eb init $EBS_APP_NAME \
+          eb init "${{ env.EBS_APP_NAME }}" \
             --platform "Docker running on 64bit Amazon Linux 2" \
-            --regi
+            --region "${{ env.AWS_REGION }}"
+
+      - name: Set EB Environment
+        run: eb use "${{ env.EBS_ENV_NAME }}"
+
+      - name: Zip Docker Compose App
+        run: zip -r deploy.zip docker-compose.yml lead_gen_api leadGen-frontend
+
+      - name: Deploy to Elastic Beanstalk
+        run: |
+          eb deploy --staged --label "v-${{ github.run_number }}"
