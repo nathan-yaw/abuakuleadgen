@@ -5,35 +5,29 @@ on:
     branches: [main]
 
 jobs:
-  build-and-deploy:
+  deploy:
+    name: Build and Deploy to AWS EB
     runs-on: ubuntu-latest
+
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
       EBS_APP_NAME: ${{ secrets.EBS_APP_NAME }}
       EBS_ENV_NAME: ${{ secrets.EBS_ENV_NAME }}
 
     steps:
-      - name: Checkout code
+      - name: Checkout Repository
         uses: actions/checkout@v3
 
-      # Build Frontend with correct context
-      - name: Build Frontend
-        working-directory: ./leadGen-frontend
-        run: docker build -t frontend .
-
-      # Build Backend with correct context
-      - name: Build Backend
-        working-directory: ./lead_gen_api
-        run: docker build -t backend .
-
-      #Install EB CLI
-      - name: Install EB CLI
+      - name: Install Python & Pip
         run: |
           sudo apt-get update
           sudo apt-get install -y python3 python3-pip
-          pip install awsebcli --upgrade
 
-      #Configure AWS Credentials
+      - name: Install AWS EB CLI
+        run: |
+          pip3 install --upgrade pip
+          pip3 install awsebcli
+
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -41,57 +35,8 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
 
-        #Initialize EB CLI
       - name: Initialize EB CLI
         run: |
-          eb init ${{ env.EBS_APP_NAME }} \
+          eb init $EBS_APP_NAME \
             --platform "Docker running on 64bit Amazon Linux 2" \
-            --region ${{ env.AWS_REGION }}
-
-      #Set RDS Environment variables
-      - name: Set RDS environment variables
-        run: |
-          eb setenv \
-            AWS_RDS_DB_NAME=${{ secrets.AWS_RDS_DB_NAME }} \
-            AWS_RDS_USERNAME=${{ secrets.AWS_RDS_USERNAME }} \
-            AWS_RDS_PASSWORD=${{ secrets.AWS_RDS_PASSWORD }} \
-            AWS_RDS_HOSTNAME=${{ secrets.AWS_RDS_HOSTNAME }} \
-            AWS_RDS_PORT=${{ secrets.AWS_RDS_PORT }} \
-            DJANGO_SETTINGS_MODULE=lead_gen_api.settings \
-            DEBUG=False
-
-      - name: Prepare Deployment
-        run: |
-          echo '{
-            "AWSEBDockerrunVersion": 2,
-            "containerDefinitions": [
-              {
-                "name": "frontend",
-                "image": "frontend",
-                "essential": true,
-                "memory": 256,
-                "portMappings": [{"hostPort": 80, "containerPort": 80}]
-              },
-              {
-                "name": "backend",
-                "image": "backend",
-                "essential": true,
-                "memory": 512,
-                "portMappings": [{"hostPort": 8000, "containerPort": 8000}],
-                "environment": [
-                  {"name": "AWS_RDS_DB_NAME", "value": "$AWS_RDS_DB_NAME"},
-                  {"name": "AWS_RDS_USERNAME", "value": "$AWS_RDS_USERNAME"},
-                  {"name": "AWS_RDS_PASSWORD", "value": "$AWS_RDS_PASSWORD"},
-                  {"name": "AWS_RDS_HOSTNAME", "value": "$AWS_RDS_HOSTNAME"},
-                  {"name": "AWS_RDS_PORT", "value": "$AWS_RDS_PORT"}
-                ]
-              }
-            ]
-          }' > Dockerrun.aws.json
-          zip deploy.zip Dockerrun.aws.json
-
-      - name: Deploy
-        run: |
-          eb init "$EBS_APP_NAME" --platform "Docker running on 64bit Amazon Linux 2" --region "$AWS_REGION"
-          eb use "$EBS_ENV_NAME"
-          eb deploy --staged --label "v-${{ github.run_number }}"
+            --regi
