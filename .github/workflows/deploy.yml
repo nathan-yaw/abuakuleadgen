@@ -1,9 +1,8 @@
-name: Deploy Docker Compose to Elastic Beanstalk
+name: Deploy to Elastic Beanstalk
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   deploy:
@@ -22,15 +21,22 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }} # Now correctly references job-level env
+          aws-region: ${{ env.AWS_REGION }}
 
-      # ... rest of your steps ...
+      - name: Install Python and EB CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3 python3-pip
+          pip install awsebcli --upgrade
+          eb --version
 
-      - name: Deploy to Elastic Beanstalk
+      - name: Initialize EB CLI
         run: |
           eb init "$EBS_APP_NAME" \
             --platform "Docker running on 64bit Amazon Linux 2" \
             --region "$AWS_REGION"
 
-          eb use "$EBS_ENV_NAME" --region "$AWS_REGION"
-          eb deploy --staged --label "v-${{ github.run_number }}" --region "$AWS_REGION"
+      - name: Deploy to EB
+        run: |
+          eb use "$EBS_ENV_NAME"
+          eb deploy --staged --label "v-${{ github.run_number }}"
