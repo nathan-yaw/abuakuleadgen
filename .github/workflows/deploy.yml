@@ -1,3 +1,15 @@
+name: Deploy Docker Compose to Elastic Beanstalk
+
+on:
+  push:
+    branches:
+      - main
+
+env:
+  AWS_REGION: ${{ secrets.AWS_REGION }}
+  EBS_APP_NAME: ${{ secrets.EBS_APP_NAME }}
+  EBS_ENV_NAME: ${{ secrets.EBS_ENV_NAME }}
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -6,28 +18,70 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Set up Docker
-        uses: docker/setup-buildx-action@v3
-
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
 
-      - name: Zip source bundle
+      - name: Generate Dockerrun.aws.json
         run: |
-          zip -r deploy.zip . -x '*.git*'
+          echo '{
+            "AWSEBDockerrunVersion": 2,
+            "containerDefinitions": [
+              {
+                "name": "frontend",
+                "image": "frontend",
+                "hostname": "frontend",
+                "essential": true,
+                "memory": 256,
+                "portMappings": [
+                  {
+                    "hostPort": 80,
+                    "containerPort": 3000
+                  }
+                ]
+              },
+              {
+                "name": "backend",
+                "image": "backend",
+                "hostname": "backend",
+                "essential": true,
+                "memory": 512,
+                "portMappings": [
+                  {
+                    "hostPort": 8000,
+                    "containerPort": 8000
+                  }
+                ]
+              }
+            ]
+          }' > Dockerrun.aws.json
+
+      - name: Create docker-compose.yml for Elastic Beanstalk
+        run: |
+          echo 'version: "3.8"
+          services:
+            frontend:
+              build: ./frontend
+              ports:
+                - "3000:3000"
+            backend:
+              build: ./backend
+              ports:
+                - "8000:8000"' > docker-compose.yml
+
+      - name: Create ZIP deployment package
+        run: |
+          zip deploy.zip Dockerrun.aws.json docker-compose.yml
+
+      - name: Install Elastic Beanstalk CLI
+        run: |
+          pip install awsebcli
 
       - name: Deploy to Elastic Beanstalk
         run: |
-          aws elasticbeanstalk create-application-version 
-            --application-name "$EBS_APP_NAME" 
-            --version-label "v-${{ github.run_number }}" 
-            --source-bundle S3Bucket=$EBS_APP_NAME, S3Key="deploy/v-${{ github.run_number }}.zip"
-
-          aws elasticbeanstalk update-environment 
-            --application-name "$EBS_APP_NAME" 
-            --environment-name "$EBS_ENV_NAME" 
-            --version-label "v-${{ github.run_number }}"
+          eb init ${{ env.EBS_APP_NAME }} --platform "Docker running on 64bit Amazon Linux 2" --region ${{ env.AWS_REGION }}
+          eb use ${{ env.EBS_ENV_NAME }}
+          eb deploy --staged --label "v-${{ github.run_number }}"
