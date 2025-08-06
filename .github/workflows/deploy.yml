@@ -1,20 +1,5 @@
 name: Deploy to Elastic Beanstalk
-uses: aws-actions/configure-aws-credentials@v4
-  with:
-    aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-    aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-    aws-region: ${{ secrets.AWS_REGION }}
-    
-name: Set RDS environment variables in Elastic Beanstalk
-  run: |
-    eb setenv \
-      AWS_RDS_DB_NAME=${{ secrets.AWS_RDS_DB_NAME }} \
-      AWS_RDS_USERNAME=${{ secrets.AWS_RDS_USERNAME }} \
-      AWS_RDS_PASSWORD=${{ secrets.AWS_RDS_PASSWORD }} \
-      AWS_RDS_HOSTNAME=${{ secrets.AWS_RDS_HOSTNAME }} \
-      AWS_RDS_PORT=${{ secrets.AWS_RDS_PORT }} \
-      DJANGO_SETTINGS_MODULE=yourproject.settings \
-      DEBUG=False
+
 on:
   push:
     branches: [main]
@@ -39,17 +24,25 @@ jobs:
       - name: Build Backend
         run: docker build -t backend ./backend
 
-      # 3. Optional: Run tests here (e.g., unit tests)
-      # - name: Run Tests
-      #   run: docker-compose run backend python manage.py test
-
-      # 4. Configure AWS
+      # 3. Configure AWS
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ env.AWS_REGION }}
+
+      # 4. Set RDS environment variables
+      - name: Set RDS environment variables
+        run: |
+          eb setenv \
+            AWS_RDS_DB_NAME=${{ secrets.AWS_RDS_DB_NAME }} \
+            AWS_RDS_USERNAME=${{ secrets.AWS_RDS_USERNAME }} \
+            AWS_RDS_PASSWORD=${{ secrets.AWS_RDS_PASSWORD }} \
+            AWS_RDS_HOSTNAME=${{ secrets.AWS_RDS_HOSTNAME }} \
+            AWS_RDS_PORT=${{ secrets.AWS_RDS_PORT }} \
+            DJANGO_SETTINGS_MODULE=yourproject.settings \
+            DEBUG=False
 
       # 5. Install EB CLI
       - name: Install EB CLI
@@ -61,7 +54,6 @@ jobs:
       # 6. Generate deployment artifacts
       - name: Prepare Deployment
         run: |
-          # Generate Dockerrun.aws.json
           echo '{
             "AWSEBDockerrunVersion": 2,
             "containerDefinitions": [
@@ -81,8 +73,6 @@ jobs:
               }
             ]
           }' > Dockerrun.aws.json
-
-          # Create deployment package
           zip deploy.zip Dockerrun.aws.json
 
       # 7. Deploy to Elastic Beanstalk
