@@ -10,8 +10,6 @@ services:
       - .env
     ports:
       - "8000:8000"
-    depends_on:
-      - db
     environment:
       - AWS_RDS_DB_NAME=${AWS_RDS_DB_NAME}
       - AWS_RDS_USERNAME=${AWS_RDS_USERNAME}
@@ -25,4 +23,4 @@ services:
     build:
       context: .
       dockerfile: leadGen-frontend/Dockerfile
-    container_name: fronten_
+    container_name: frontend
