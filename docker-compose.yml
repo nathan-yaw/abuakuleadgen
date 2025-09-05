@@ -21,6 +21,8 @@ services:
 
   frontend:
     build:
-      context: .
-      dockerfile: leadGen-frontend/Dockerfile
+      context: ./leadGen-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
     container_name: frontend

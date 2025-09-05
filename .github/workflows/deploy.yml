@@ -11,8 +11,12 @@ jobs:
 
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_ACCOUNT_ID: ${{ secrets.AWS_ACCOUNT_ID }}
       EBS_APP_NAME: ${{ secrets.EBS_APP_NAME }}
       EBS_ENV_NAME: ${{ secrets.EBS_ENV_NAME }}
+      FRONTEND_REPO: leadgen-frontend
+      BACKEND_REPO: leadgen-backend
+      COMMIT_SHA: ${{ github.sha }}
 
     steps:
       - name: Checkout Repository
@@ -33,19 +37,70 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        run: |
+          aws ecr get-login-password --region ${{ env.AWS_REGION }} \
+            | docker login --username AWS --password-stdin ${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com
+
+      - name: Build & Push Frontend Image
+        run: |
+          docker build -t $FRONTEND_REPO ./leadGen-frontend
+          docker tag $FRONTEND_REPO:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$FRONTEND_REPO:${COMMIT_SHA}
+          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$FRONTEND_REPO:${COMMIT_SHA}
+
+      - name: Build & Push Backend Image
+        run: |
+          docker build -t $BACKEND_REPO ./lead_gen_api
+          docker tag $BACKEND_REPO:latest $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$BACKEND_REPO:${COMMIT_SHA}
+          docker push $AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$BACKEND_REPO:${COMMIT_SHA}
+
+      - name: Generate Dockerrun.aws.json
+        run: |
+          cat > Dockerrun.aws.json <<EOL
+          {
+            "AWSEBDockerrunVersion": 2,
+            "containerDefinitions": [
+              {
+                "name": "frontend",
+                "image": "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${FRONTEND_REPO}:${COMMIT_SHA}",
+                "essential": true,
+                "memory": 256,
+                "portMappings": [
+                  {
+                    "hostPort": 80,
+                    "containerPort": 80
+                  }
+                ]
+              },
+              {
+                "name": "backend",
+                "image": "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${BACKEND_REPO}:${COMMIT_SHA}",
+                "essential": true,
+                "memory": 256,
+                "portMappings": [
+                  {
+                    "hostPort": 8000,
+                    "containerPort": 8000
+                  }
+                ]
+              }
+            ]
+          }
+          EOL
+
+      - name: Zip Dockerrun for EB
+        run: zip deploy.zip Dockerrun.aws.json
 
       - name: Initialize EB CLI
         run: |
           eb init "${{ env.EBS_APP_NAME }}" \
-            --platform "Docker running on 64bit Amazon Linux 2" \
+            --platform "Multi-container Docker running on 64bit Amazon Linux 2" \
             --region "${{ env.AWS_REGION }}"
 
       - name: Set EB Environment
         run: eb use "${{ env.EBS_ENV_NAME }}"
-
-      - name: Zip Docker Compose App
-        run: zip -r deploy.zip docker-compose.yml lead_gen_api leadGen-frontend
 
       - name: Deploy to Elastic Beanstalk
         run: |
