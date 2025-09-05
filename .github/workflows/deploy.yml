@@ -92,6 +92,11 @@ jobs:
 
       - name: Zip Dockerrun for EB
         run: zip deploy.zip Dockerrun.aws.json
+      - name: Ensure ECR repos exist
+        run: |
+          aws ecr describe-repositories --repository-names $FRONTEND_REPO || aws ecr create-repository --repository-name $FRONTEND_REPO
+          aws ecr describe-repositories --repository-names $BACKEND_REPO || aws ecr create-repository --repository-name $BACKEND_REPO
+
 
       - name: Initialize EB CLI
         run: |
