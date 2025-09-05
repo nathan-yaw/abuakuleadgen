@@ -75,7 +75,7 @@ jobs:
       - name: Initialize EB CLI
         run: |
           eb init "${{ env.EBS_APP_NAME }}" \
-            --platform "Multi-container Docker running on 64bit Amazon Linux 2" \
+            --platform "Docker running on 64bit Amazon Linux 2023" \
             --region "${{ env.AWS_REGION }}"
 
       - name: Set EB Environment
