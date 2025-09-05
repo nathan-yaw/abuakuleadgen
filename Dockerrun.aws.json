@@ -1,5 +1,5 @@
 {
-  "AWSEBDockerrunVersion": 1,
+  "AWSEBDockerrunVersion": 3,
   "containerDefinitions": [
     {
       "name": "frontend",
@@ -20,6 +20,7 @@
       "memory": 256,
       "portMappings": [
         {
+          "hostPort": 8000,
           "containerPort": 8000
         }
       ]
